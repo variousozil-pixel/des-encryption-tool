@@ -111,3 +111,51 @@ sbox = [
         [2,1,14,7,4,10,8,13,15,12,9,0,3,5,6,11]
     ]
 ]
+#helper functions
+
+class des:
+    def __init__(self, hexkey):
+        # convert hex key to 64-bit list
+        self.bitkey = self.convert_hex(hexkey)
+
+        # placeholder for subkeys (to do tmrw)
+        self.roundkeys = []
+
+    def convert_hex(self, hx):
+        # hex string to 64 bit list
+        v = int(hx, 16)
+        return [(v >> (63 - i)) & 1 for i in range(64)]
+
+    def convertbits(self, bits):
+        # 64 bits to hex string
+        v = 0
+        for b in bits:
+            v = (v << 1) | b
+        return f"{v:016X}"
+
+    def permute(self, bits, table):
+        #permutation table
+        return [bits[i - 1] for i in table]
+
+    def xor(self, a, b):
+        # bitwise xor
+        return [x ^ y for x, y in zip(a, b)]
+
+    def leftshift(self, arr, n):
+        # circular left shift
+        return arr[n:] + arr[:n]
+
+    # start key schedule (to do tmrw also)
+    def makesubkeys(self, key64):
+        k56 = self.permute(key64, pc1)
+        c, d = k56[:28], k56[28:]
+        subkeys = []
+
+        return subkeys
+
+
+# quick test to show helpers do di do dda work or not hehehehehe
+if __name__ == "__main__":
+    key = "133457799BBCDFF1"
+    d = des(key)
+    print("key bits:", d.bitkey[:16], "...")
