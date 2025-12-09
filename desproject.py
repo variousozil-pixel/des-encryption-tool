@@ -1,4 +1,3 @@
-
 iptab = [
     58,50,42,34,26,18,10,2, 60,52,44,36,28,20,12,4,
     62,54,46,38,30,22,14,6, 64,56,48,40,32,24,16,8,
@@ -45,7 +44,6 @@ pc2 = [
 shifttab = [1,1,2,2,2,2,2,2,1,2,2,2,2,2,2,1]
 
 # sboxes (8 blocks)
-
 sbox = [
     # s1
     [
@@ -54,7 +52,6 @@ sbox = [
         [4,1,14,8,13,6,2,11,15,12,9,7,3,10,5,0],
         [15,12,8,2,4,9,1,7,5,11,3,14,10,0,6,13]
     ],
-
     # s2
     [
         [15,1,8,14,6,11,3,4,9,7,2,13,12,0,5,10],
@@ -62,7 +59,6 @@ sbox = [
         [0,14,7,11,10,4,13,1,5,8,12,6,9,3,2,15],
         [13,8,10,1,3,15,4,2,11,6,7,12,0,5,14,9]
     ],
-
     # s3
     [
         [10,0,9,14,6,3,15,5,1,13,12,7,11,4,2,8],
@@ -70,7 +66,6 @@ sbox = [
         [13,6,4,9,8,15,3,0,11,1,2,12,5,10,14,7],
         [1,10,13,0,6,9,8,7,4,15,14,3,11,5,2,12]
     ],
-
     # s4
     [
         [7,13,14,3,0,6,9,10,1,2,8,5,11,12,4,15],
@@ -78,7 +73,6 @@ sbox = [
         [10,6,9,0,12,11,7,13,15,1,3,14,5,2,8,4],
         [3,15,0,6,10,1,13,8,9,4,5,11,12,7,2,14]
     ],
-
     # s5
     [
         [2,12,4,1,7,10,11,6,8,5,3,15,13,0,14,9],
@@ -86,7 +80,6 @@ sbox = [
         [4,2,1,11,10,13,7,8,15,9,12,5,6,3,0,14],
         [11,8,12,7,1,14,2,13,6,15,0,9,10,4,5,3]
     ],
-
     # s6
     [
         [12,1,10,15,9,2,6,8,0,13,3,4,14,7,5,11],
@@ -94,7 +87,6 @@ sbox = [
         [9,14,15,5,2,8,12,3,7,0,4,10,1,13,11,6],
         [4,3,2,12,9,5,15,10,11,14,1,7,6,0,8,13]
     ],
-
     # s7
     [
         [4,11,2,14,15,0,8,13,3,12,9,7,5,10,6,1],
@@ -102,7 +94,6 @@ sbox = [
         [1,4,11,13,12,3,7,14,10,15,6,8,0,5,9,2],
         [6,11,13,8,1,4,10,7,9,5,0,15,14,2,3,12]
     ],
-
     # s8
     [
         [13,2,8,4,6,15,11,1,10,9,3,14,5,0,12,7],
@@ -111,8 +102,8 @@ sbox = [
         [2,1,14,7,4,10,8,13,15,12,9,0,3,5,6,11]
     ]
 ]
-#helper functions
 
+#helper functions
 class des:
     def __init__(self, hexkey):
         # convert hex key to 64-bit list
@@ -120,6 +111,9 @@ class des:
 
         # placeholder for subkeys (to do tmrw)
         self.roundkeys = []
+
+        # generate keys now so encrypt works
+        self.makesubkeys(self.bitkey)
 
     def convert_hex(self, hx):
         # hex string to 64 bit list
@@ -134,7 +128,7 @@ class des:
         return f"{v:016X}"
 
     def permute(self, bits, table):
-        #permutation table
+        # permutation table
         return [bits[i - 1] for i in table]
 
     def xor(self, a, b):
@@ -147,15 +141,94 @@ class des:
 
     # start key schedule (to do tmrw also)
     def makesubkeys(self, key64):
+        # Apply PC1 to shrink 64 bit key to 56 bits (drops parity bits)
         k56 = self.permute(key64, pc1)
+
+        # split into C0 and D0 each one will be 28 bit
         c, d = k56[:28], k56[28:]
+
         subkeys = []
 
+        # for each round (1–16)
+        for shift_amount in shifttab:
+            # rotate C and D
+            c = self.leftshift(c, shift_amount)
+            d = self.leftshift(d, shift_amount)
+
+            # combine C and D to 56 bits again
+            cd = c + d
+
+            # apply PC2 to 48 bit round key
+            roundkey = self.permute(cd, pc2)
+
+            subkeys.append(roundkey)
+
+        # store all 16 roundkeys
+        self.roundkeys = subkeys
         return subkeys
 
+    # FEISTEL FUNCTION
+    def feistel(self, r, k):
+        # expand 32-bit R to 48 bits using expand table
+        e = self.permute(r, expand)
 
-# quick test to show helpers do di do dda work or not hehehehehe
+        # xor expanded R with round key
+        x = self.xor(e, k)
+
+        # output array for the 32bit result
+        out = []
+
+        # process 48 bits as 8 blocks of 6 bits
+        for i in range(8):
+            block = x[6*i : 6*i+6]
+
+            # row = first + last bit (2 bits)
+            row = (block[0] << 1) | block[5]
+
+            # column = middle 4 bits
+            col = (block[1]<<3) | (block[2]<<2) | (block[3]<<1) | block[4]
+
+            # lookup Sbox value (0 to 15)
+            val = sbox[i][row][col]
+
+            # convert 4bit value to bits and append
+            out += [
+                (val >> 3) & 1,
+                (val >> 2) & 1,
+                (val >> 1) & 1,
+                val & 1
+            ]
+
+        # apply Pbox permutation to 32bit output
+        return self.permute(out, ptab)
+
+    # encrypt block
+    def encrypt1(self, pt_hex):
+        bits = self.convert_hex(pt_hex)
+        b = self.permute(bits, iptab)
+
+        l, r = b[:32], b[32:]
+
+        for k in self.roundkeys:
+            l, r = r, self.xor(l, self.feistel(r, k))
+
+        return self.convertbits(self.permute(r + l, fptab))
+
+    # decrypt block
+    def decrypt1(self, ct_hex):
+        bits = self.convert_hex(ct_hex)
+        b = self.permute(bits, iptab)
+
+        l, r = b[:32], b[32:]
+
+        for k in reversed(self.roundkeys):
+            l, r = r, self.xor(l, self.feistel(r, k))
+
+        return self.convertbits(self.permute(r + l, fptab))
+
+# tiny test to show helpers do di do dda work or not hehehehehe
 if __name__ == "__main__":
     key = "133457799BBCDFF1"
     d = des(key)
     print("key bits:", d.bitkey[:16], "...")
+    print("enc test:", d.encrypt1("0123456789ABCDEF"))
